@@ -4,10 +4,13 @@ import blogRoutes from "./routes/blogRoutes.js";
 import dotenv from "dotenv";
 import express from "express";
 import mongoose from "mongoose";
+import cors from "cors";
 
 dotenv.config();
 
 const app = express();
+
+app.use(cors()); // Enable CORS for all routes
   
 // Middleware
 app.use(express.json()); // Parse JSON bodies
