@@ -6,7 +6,6 @@ export const getOwnerDashboardAnalytics = async (req, res) => {
   try {
     const authorId = req.user.id; // From auth middleware
 
-    // 1. Fetch all blogs owned by this author
     const authorBlogs = await Blog.find({ author: authorId });
     const blogIds = authorBlogs.map(blog => blog._id);
 
@@ -19,15 +18,12 @@ export const getOwnerDashboardAnalytics = async (req, res) => {
       });
     }
 
-    // 2. Calculate Cumulative Lifetime Summary Metrics
     const totalPosts = authorBlogs.length;
     const totalViews = authorBlogs.reduce((sum, blog) => sum + (blog.views || 0), 0);
     const totalLikes = authorBlogs.reduce((sum, blog) => sum + (blog.likes?.length || 0), 0);
     
-    // Count total comments across all author's blogs
     const totalComments = await Comment.countDocuments({ blog: { $in: blogIds } });
 
-    // 3. 7-Day Daily Traffic Timeline Aggregation
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -47,8 +43,7 @@ export const getOwnerDashboardAnalytics = async (req, res) => {
       { $sort: { _id: 1 } } // Sort chronologically (Oldest to Newest)
     ]);
 
-    // 4. Detailed Article-by-Article Breakdown Matrix
-    // Compiles comments count per article alongside views and likes
+
     const articlesBreakdown = await Promise.all(
       authorBlogs.map(async (blog) => {
         const commentCount = await Comment.countDocuments({ blog: blog._id });
@@ -64,7 +59,6 @@ export const getOwnerDashboardAnalytics = async (req, res) => {
       })
     );
 
-    // 5. Top Tags Engagement Distribution
     const tagCloudMap = {};
     authorBlogs.forEach(blog => {
       blog.tags.forEach(tag => {
@@ -76,7 +70,6 @@ export const getOwnerDashboardAnalytics = async (req, res) => {
       .sort((a, b) => b.views - a.views)
       .slice(0, 5);
 
-    // Return the comprehensive dashboard payload
     res.status(200).json({
       summary: {
         totalPosts,

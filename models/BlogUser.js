@@ -4,8 +4,8 @@ const blogUserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
-  bio: { type: String, default: "" }, // New Bio field
-  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "BlogUser" }], // New Followers Array
+  bio: { type: String, default: "" }, 
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "BlogUser" }], 
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: "BlogUser" }],
   createdAt: { type: Date, default: Date.now },
 });

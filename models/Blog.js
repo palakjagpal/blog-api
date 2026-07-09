@@ -11,8 +11,8 @@ const blogSchema = new mongoose.Schema({
     enum: ["draft", "published"], 
     default: "draft" 
   },
-  views: { type: Number, default: 0 }, // New View Counter Field
-  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "BlogUser" }], // New Likes Array Field
+  views: { type: Number, default: 0 }, 
+  likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "BlogUser" }], 
   createdAt: { type: Date, default: Date.now },
 });
 

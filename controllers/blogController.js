@@ -77,7 +77,6 @@ export const getAllBlogs = async (req, res) => {
   }
 };*/
 
-// 1. Updated getAllBlogs to include reading time
 export const getAllBlogs = async (req, res) => {
   try {
     const { search, tag, page, limit } = req.query;
@@ -93,25 +92,62 @@ export const getAllBlogs = async (req, res) => {
 
     const totalBlogs = await Blog.countDocuments(filterQuery);
 
-    let dbQuery = Blog.find(filterQuery).populate("author", "name email");
-    dbQuery = dbQuery.sort(search ? { score: { $meta: "textScore" } } : { createdAt: -1 });
+    const pipeline = [
+      { $match: filterQuery },
+      {
+        $lookup: {
+          from: "comments",
+          localField: "_id",
+          foreignField: "blog",
+          as: "commentData"
+        }
+      },
+      {
+        $addFields: {
+          commentsCount: { $size: "$commentData" }
+        }
+      },
+      {
+        $project: {
+          commentData: 0 
+        }
+      },
+      {
+        $lookup: {
+          from: "blogusers",
+          localField: "author",
+          foreignField: "_id",
+          as: "author"
+        }
+      },
+      {
+        $unwind: {
+          path: "$author",
+          preserveNullAndEmptyArrays: true
+        }
+      }
+    ];
 
-    if (isPaginationEnabled) {
-      dbQuery = dbQuery.skip(skipNum).limit(limitNum);
+    if (search) {
+      pipeline.push({ $sort: { score: { $meta: "textScore" } } });
+    } else {
+      pipeline.push({ $sort: { createdAt: -1 } });
     }
 
-    const blogs = await dbQuery;
+    if (isPaginationEnabled) {
+      pipeline.push({ $skip: skipNum });
+      pipeline.push({ $limit: limitNum });
+    }
 
-    // --- ENHANCEMENT: Inject readingTime into the response array ---
-    const blogsWithReadingTime = blogs.map((blog) => {
-      return {
-        ...blog._doc, // Extract raw mongoose document data
-        readingTime: `${calculateReadingTime(blog.content)} min read` // Append reading metric
-      };
-    });
+    const blogs = await Blog.aggregate(pipeline);
+
+    const blogsWithDetails = blogs.map((blog) => ({
+      ...blog,
+      readingTime: `${calculateReadingTime(blog.content)} min read`
+    }));
 
     res.status(200).json({
-      blogs: blogsWithReadingTime, // Send the modified array
+      blogs: blogsWithDetails,
       pagination: isPaginationEnabled ? {
         totalItems: totalBlogs,
         currentPage: pageNum,
@@ -126,6 +162,8 @@ export const getAllBlogs = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+
 /*
 export const getBlogById = async (req, res) => {
   try {
@@ -149,7 +187,7 @@ export const getBlogById = async (req, res) => {
 };*/
 
 
-// 2. Updated getBlogById to include reading time
+//getBlogById 
 export const getBlogById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -163,11 +201,75 @@ export const getBlogById = async (req, res) => {
         return res.status(403).json({ message: "This draft is private to the author" });
       }
     } else {
-      blog.views += 1;
-      await blog.save();
+      // Check if we should count this view
+      let shouldCountView = false;
+      let userId = null;
+      
+      // If user is logged in
+      if (req.user) {
+        userId = req.user.id;
+        // Don't count if the viewer is the author
+        if (blog.author._id.toString() === userId) {
+          shouldCountView = false;
+        } else {
+          // Check if this user has already viewed this blog
+          const existingView = await ViewLog.findOne({
+            blog: blog._id,
+            user: userId
+          });
+          
+          if (!existingView) {
+            shouldCountView = true;
+          }
+        }
+      } else {
+        // For unauthenticated users, check by IP address or session
+        // Simple approach: use IP address
+        const clientIp = req.ip || req.connection.remoteAddress;
+        
+        // Check if this IP has viewed this blog in the last 24 hours
+        const twentyFourHoursAgo = new Date();
+        twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+        
+        const existingView = await ViewLog.findOne({
+          blog: blog._id,
+          ip: clientIp,
+          viewedAt: { $gte: twentyFourHoursAgo }
+        });
+        
+        if (!existingView) {
+          shouldCountView = true;
+        }
+      }
+      
+      // Only increment views if we should count this view
+      if (shouldCountView) {
+        blog.views += 1;
+        await blog.save();
+        
+        // Log the view for future deduplication
+        try {
+          const viewLogData = {
+            blog: blog._id,
+            viewedAt: new Date()
+          };
+          
+          // Add user ID if logged in
+          if (userId) {
+            viewLogData.user = userId;
+          } else {
+            // Add IP for unauthenticated users
+            viewLogData.ip = req.ip || req.connection.remoteAddress;
+          }
+          
+          const viewLog = new ViewLog(viewLogData);
+          await viewLog.save();
+        } catch (logError) {
+          console.error('Error logging view:', logError);
+        }
+      }
     }
 
-    // --- ENHANCEMENT: Inject readingTime into the single blog response ---
     const blogResponse = {
       ...blog._doc,
       readingTime: `${calculateReadingTime(blog.content)} min read`
@@ -179,8 +281,7 @@ export const getBlogById = async (req, res) => {
   }
 };
 
-
-// 2. NEW CONTROLLER FUNCTION: Like / Unlike a blog post
+//Like / Unlike a blog post
 export const toggleLikeBlog = async (req, res) => {
   try {
     const { id } = req.params;

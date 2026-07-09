@@ -14,13 +14,12 @@ cloudinaryInstance.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Setup storage engine with the exact structure the library expects
 const storage = new CloudinaryStorage({
-  // Trick the library into receiving the correctly nested object it wants
+  
   cloudinary: { v2: cloudinaryInstance }, 
   params: {
     folder: "blog_cover_images",
-    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    allowed_formats: ["jpg", "jpeg", "png", "webp", "gif"],
   },
 });
 

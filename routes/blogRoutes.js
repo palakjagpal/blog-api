@@ -24,11 +24,9 @@ const optionalProtect = (req, res, next) => {
   next();
 };
 
-// Public Routes
 router.get("/readAll", getAllBlogs); 
 router.get("/read/:id", optionalProtect, getBlogById); 
 
-// Protected Routes
 router.post("/createBlog", protect,upload.single("coverImage"), createBlog); 
 router.put("/updateBlog/:id", protect, updateBlog); 
 router.delete("/deleteBlog/:id", protect, deleteBlog); 
