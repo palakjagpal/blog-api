@@ -27,13 +27,18 @@ export const getUserProfile = async (req, res) => {
 //Follow / Unfollow a Writer
 export const toggleFollowUser = async (req, res) => {
   try {
+    //targetUserId: The ID of the person you want to follow (from the URL path)
     const targetUserId = req.params.userId; 
-    const currentUserId = req.user.id;     
+    //currentUserId: Your own ID (extracted from the logged-in session/token)
+    const currentUserId = req.user.id;
 
+    //Stops the operation if you try to follow your own account
     if (targetUserId === currentUserId) {
       return res.status(400).json({ message: "You cannot follow yourself" });
     }
 
+    //Looks up both accounts in the BlogUser collection
+    //Fails safely if either account does not exist
     const targetUser = await BlogUser.findById(targetUserId);
     const currentUser = await BlogUser.findById(currentUserId);
 
@@ -41,8 +46,10 @@ export const toggleFollowUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    //Checks if the target user is already in your following array
     const isFollowing = currentUser.following.includes(targetUserId);
 
+    //If true, it filters out (removes) the IDs from both users' profiles
     if (isFollowing) {
       currentUser.following = currentUser.following.filter(id => id.toString() !== targetUserId);
       targetUser.followers = targetUser.followers.filter(id => id.toString() !== currentUserId);
@@ -52,6 +59,7 @@ export const toggleFollowUser = async (req, res) => {
       
       return res.status(200).json({ message: "Successfully unfollowed user" });
     } else {
+      //If false, it pushes (adds) the IDs into the respective arrays
       currentUser.following.push(targetUserId);
       targetUser.followers.push(currentUserId);
       
@@ -70,17 +78,23 @@ export const toggleFollowUser = async (req, res) => {
 //Fetch Personalized Feed 
 export const getFollowingFeed = async (req, res) => {
   try {
+
+    //Looks up the logged-in user's profile to access their following list (the array of user IDs they follow
     const currentUser = await BlogUser.findById(req.user.id);
-    
+
     if (!currentUser) return res.status(404).json({ message: "User not found" });
 
     // Use Mongoose '$in' operator to discover blogs where author matches any ID in following array
+    //author: { $in: ... }: Tells MongoDB to find blogs where the author match any ID inside the currentUser.following array
+    //status: "published": Ensures the user only sees live posts, hiding drafts
     const feedBlogs = await Blog.find({
       author: { $in: currentUser.following },
       status: "published"
     })
+    //populate: Replaces the raw author ID string with the author's real data (specifically just their name, email, and bio for security)
+    //sort({ createdAt: -1 }): Arranges the posts in reverse chronological order so the newest posts appear at the top
     .populate("author", "name email bio")
-    .sort({ createdAt: -1 }); // Newest articles first
+    .sort({ createdAt: -1 }); //Newest articles first
 
     res.status(200).json(feedBlogs);
   } catch (error) {
